@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOURSINFO.COM</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Configure Tailwind for Inter font and custom colors */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        
+        :root {
+            --primary-neon: #00C6FF; /* Brighter Electric Blue Accent for dark theme */
+            --dark-bg-base: #0A111F; /* Very dark blue slate base */
+            --dark-bg-card: #141C2E; /* Slightly lighter card background */
+            --light-text: #E5E7EB;
+        }
+
+        /* --- CANVAS BACKGROUND STYLES --- */
+        #bgCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1; /* Ensures it stays behind content */
+            background-color: var(--dark-bg-base); /* Base color for the nebula */
+            will-change: transform; /* Performance optimization */
+        }
+        
+        /* Custom Electric Glow Effect (More pronounced on dark background) */
+        .electric-glow {
+            box-shadow: 0 4px 15px rgba(0, 198, 255, 0.1), 0 0 5px rgba(0, 198, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .electric-glow:hover {
+            box-shadow: 0 8px 30px rgba(0, 198, 255, 0.3), 0 0 15px rgba(0, 198, 255, 0.8);
+            border-color: var(--primary-neon);
+        }
+
+        .text-neon {
+            color: var(--primary-neon);
+            text-shadow: 0 0 4px rgba(0, 198, 255, 0.5); /* Enhanced neon text */
+        }
+        
+        .bg-gradient-neon {
+            background: linear-gradient(90deg, #00C6FF, #007BFF);
+        }
+        
+        /* Modal Backdrop */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.9); 
+            backdrop-filter: blur(8px);
+        }
+
+        /* UPDATED MODAL CONTENT ANIMATION: 3D Flip-In */
+        .modal-content {
+            /* Custom spring-like curve for a more dramatic entrance */
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.4s ease-out; 
+            transform: perspective(1000px) rotateX(-15deg) scale(0.9);
+            opacity: 0;
+            will-change: transform, opacity;
+        }
+        .modal-active .modal-content {
+            transform: perspective(1000px) rotateX(0deg) scale(1);
+            opacity: 1;
+        }
+        
+        /* Status Ring Animation */
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(0, 198, 255, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 198, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 198, 255, 0); }
+        }
+
+        .pulse-active {
+            animation: pulse-ring 2s infinite;
+        }
+
+        /* HERO TEXT GLITCH EFFECT */
+        @keyframes heroGlitch {
+            0% { clip-path: inset(40% 0 30% 0); opacity: 0.9; transform: skewX(0deg); }
+            5% { clip-path: inset(25% 0 45% 0); opacity: 0.7; transform: skewX(-5deg); }
+            10% { clip-path: inset(60% 0 10% 0); opacity: 0.8; transform: skewX(1deg); }
+            15% { clip-path: inset(0 0 0 0); opacity: 1; transform: skewX(0deg); }
+            100% { clip-path: inset(0 0 0 0); opacity: 1; transform: skewX(0deg); }
+        }
+        
+        .hero-glitch {
+            animation: heroGlitch 1.5s ease-out 0.5s 1; 
+        }
+
+        /* DATA FLOW PULSE BORDER */
+        @keyframes dataPulse {
+            0% { border-color: rgba(0, 198, 255, 0.3); box-shadow: 0 0 10px rgba(0, 198, 255, 0.3); }
+            50% { border-color: rgba(0, 198, 255, 0.8); box-shadow: 0 0 20px rgba(0, 198, 255, 0.8); }
+            100% { border-color: rgba(0, 198, 255, 0.3); box-shadow: 0 0 10px rgba(0, 198, 255, 0.3); }
+        }
+
+        .data-flow-pulse {
+            animation: dataPulse 4s ease-in-out infinite;
+        }
+
+        /* INPUT FOCUS GLOW (for forms) */
+        @keyframes inputFocusGlow {
+            0%, 100% { box-shadow: 0 0 0 0px rgba(0, 198, 255, 0.2); border-color: rgb(55 65 81); } 
+            50% { box-shadow: 0 0 10px 1px rgba(0, 198, 255, 0.8); border-color: var(--primary-neon); }
+        }
+
+        .input-focus-glow:focus {
+            outline: none;
+            box-shadow: 0 0 8px var(--primary-neon);
+            animation: inputFocusGlow 1s ease-in-out infinite alternate;
+        }
+
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dark-base': '#0A111F',
+                        'neon-blue': '#00C6FF', 
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+
+        // --- CANVAS ANIMATION LOGIC: STOCHASTIC NEBULA ---
+
+        let canvas, ctx, particles = [];
+        const PARTICLE_COUNT =  180;
+        const CONNECT_DISTANCE = 100; // Max distance for lines
+        const NEON_COLOR = 'rgba(0, 198, 255, 0.5)';
+
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                // Random velocity for subtle movement
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.radius = Math.random() * 1.5 + 0.5;
+            }
+
+            update() {
+                // Move particle
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Simple wrap-around boundary logic
+                if (this.x < 0 || this.x > canvas.width) this.x = (this.x < 0) ? canvas.width : 0;
+                if (this.y < 0 || this.y > canvas.height) this.y = (this.y < 0) ? canvas.height : 0;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = NEON_COLOR;
+                ctx.shadowColor = NEON_COLOR;
+                ctx.shadowBlur = 5;
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset shadow for lines
+            }
+        }
+
+        function initCanvas() {
+            canvas = document.getElementById('bgCanvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+
+            // Create particles
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                particles.push(new Particle(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height
+                ));
+            }
+            animateCanvas();
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+
+
+        function connectParticles() {
+            let opacity = 1;
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i; j < particles.length; j++) {
+                    const dist = Math.hypot(particles[i].x - particles[j].x, particles[i].y - particles[j].y);
+
+                    if (dist < CONNECT_DISTANCE) {
+                        // Calculate opacity based on distance (closer = brighter line)
+                        opacity = 1 - (dist / CONNECT_DISTANCE); 
+                        
+                        ctx.strokeStyle = `rgba(0, 198, 255, ${opacity * 0.4})`; 
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function animateCanvas() {
+            // Clear canvas completely
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Connect lines first
+            connectParticles();
+
+            // Update and draw particles
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            requestAnimationFrame(animateCanvas);
+        }
+
+        // --- GENERAL WEBSITE LOGIC ---
+
+        // --- MODAL HANDLING LOGIC ---
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    modal.classList.add('modal-active');
+                }, 10);
+            }
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.classList.remove('modal-active');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                }, 400); 
+            }
+        }
+
+        // --- DYNAMIC NETWORK STATUS SIMULATION (Data Animation) ---
+        function updateNetworkStatus() {
+            const latencyDisplay = document.getElementById('latencyDisplay');
+            const latencyGauge = document.getElementById('latencyGauge');
+            const nodeStatus = document.getElementById('nodeStatus');
+            const throughputDisplay = document.getElementById('throughputDisplay');
+            const throughputBar = document.getElementById('throughputBar');
+            
+            // 1. Simulate Latency (5ms - 60ms range)
+            const newLatency = Math.floor(Math.random() * 55) + 5;
+            latencyDisplay.textContent = `${newLatency} ms`;
+            
+            const latencyPercent = Math.min(100, (newLatency / 60) * 100);
+            
+            let gaugeColorClass = 'bg-neon-blue';
+            let statusText = "Online | Stable";
+            let statusColorClass = 'text-green-400';
+            
+            if (newLatency > 40) {
+                gaugeColorClass = 'bg-red-500'; 
+                statusText = "Warning | Critical Latency";
+                statusColorClass = 'text-red-500';
+            } else if (newLatency > 20) {
+                gaugeColorClass = 'bg-orange-400'; 
+                statusText = "Online | Moderate Load";
+                statusColorClass = 'text-orange-400';
+            } else {
+                gaugeColorClass = 'bg-neon-blue'; 
+            }
+            
+            latencyGauge.style.width = `${latencyPercent}%`;
+            latencyGauge.className = `h-full rounded-full transition-all duration-700 ${gaugeColorClass}`;
+            
+            // 2. Simulate Throughput (150 GB/s - 250 GB/s range)
+            const newThroughput = (Math.random() * 100 + 150).toFixed(2);
+            throughputDisplay.textContent = `${newThroughput} GB/s`;
+
+            const minThroughput = 150;
+            const maxThroughput = 250;
+            const currentThroughputValue = parseFloat(newThroughput);
+            const throughputPercent = Math.min(100, ((currentThroughputValue - minThroughput) / (maxThroughput - minThroughput)) * 100);
+            
+            throughputBar.style.width = `${throughputPercent}%`;
+
+            // 3. Update Node Status
+            nodeStatus.textContent = statusText;
+            nodeStatus.className = `font-semibold text-lg transition-colors duration-700 ${statusColorClass}`;
+        }
+
+        // Update status every 2 seconds
+        setInterval(updateNetworkStatus, 2000);
+
+        // Run on load to set initial values, activate Lucide icons, and start Canvas
+        window.onload = function() {
+            updateNetworkStatus();
+            lucide.createIcons();
+            initCanvas(); // Initialize the new canvas background
+        }
+    </script>
+</head>
+
+<body class="bg-dark-base text-gray-100 font-sans min-h-screen pt-16">
+
+    <!-- Canvas Background Layer: Stochastic Nebula -->
+    <canvas id="bgCanvas"></canvas>
+
+    <!-- Navigation Header (Dark, slightly transparent) -->
+    <header class="fixed top-0 left-0 right-0 z-20 bg-dark-base/95 backdrop-blur-sm shadow-2xl shadow-neon-blue/20 border-b border-neon-blue/10">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+            <!-- Logo -->
+            <div class="flex items-center space-x-2">
+                <i data-lucide="scan" class="text-neon-blue h-6 w-6 pulse-active rounded-full"></i>
+                <span class="text-2xl font-extrabold tracking-widest text-gray-100 text-neon">YOURSINFO</span>
+            </div>
+            
+            <!-- Desktop Links -->
+            <div class="hidden lg:flex space-x-8 font-medium text-gray-400">
+                <a href="#services" class="hover:text-neon transition duration-300">Services</a>
+                <a href="#status" class="hover:text-neon transition duration-300">Monitor</a>
+                <a href="#team" class="hover:text-neon transition duration-300">Team</a>
+                <a href="#contact" class="hover:text-neon transition duration-300">Contact</a>
+            </div>
+
+            <!-- Auth Buttons -->
+            <div class="flex items-center space-x-4">
+                <button 
+                    onclick="openModal('loginModal')"
+                    class="px-4 py-2 text-sm font-semibold text-gray-300 transition duration-300 rounded-lg border border-gray-700 hover:border-neon hover:text-neon electric-glow">
+                    Login
+                </button>
+                <button 
+                    onclick="openModal('signupModal')"
+                    class="px-4 py-2 text-sm font-semibold text-white bg-gradient-neon rounded-lg transition duration-300 shadow-lg shadow-neon-blue/40 hover:shadow-neon-blue/60 electric-glow">
+                    Sign Up
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content Wrapper -->
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
+
+        <!-- 1. HERO SECTION (Dark Base) -->
+        <section class="text-center py-20 lg:py-32" id="hero">
+            <h1 class="text-5xl md:text-7xl font-extrabold leading-tight tracking-tighter mb-4 text-gray-50 hero-glitch">
+                <span class="text-neon">The Next Era</span> of Yoursinfo.
+            </h1>
+            <p class="text-xl md:text-2xl text-gray-400 mb-8 max-w-3xl mx-auto">
+                At YoursInfo, we specialize in providing top-notch IT solutions to help businesses leverage technology for growth and success. Whether you're a startup, an SME, or a large corporation.
+            </p>
+            <div class="space-x-4">
+                <a href="#services" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-neon rounded-xl transition duration-300 transform hover:scale-105 shadow-xl shadow-neon-blue/40 electric-glow">
+                    Explore Services
+                </a>
+                <a href="#contact" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-neon border border-neon rounded-xl transition duration-300 transform hover:bg-neon-blue/10 hover:shadow-md hover:shadow-neon-blue/20">
+                    Contact Grid
+                </a>
+            </div>
+        </section>
+
+        <!-- 2. SERVICES SECTION -->
+        <section class="pt-20 pb-16 border-t border-gray-800/50 bg-gray-900/50 rounded-xl p-8" id="services">
+            <h2 class="text-4xl font-bold text-center mb-12 text-neon">Core Services Protocol</h2>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Service Cards -->
+                <div class="p-6 border border-gray-700 rounded-xl bg-dark-bg-card hover:bg-gray-800 transition duration-500 electric-glow">
+                    <i data-lucide="cpu" class="h-8 w-8 mb-4 text-neon"></i>
+                    <h3 class="text-xl font-semibold mb-2 text-gray-100">IT Consulting</h3>
+                    <p class="text-gray-400 text-sm">Our consultants offer expert advice to help you optimize your technology investments, streamline operations.</p>
+                </div>
+                <div class="p-6 border border-gray-700 rounded-xl bg-dark-bg-card hover:bg-gray-800 transition duration-500 electric-glow">
+                    <i data-lucide="lock" class="h-8 w-8 mb-4 text-neon"></i>
+                    <h3 class="text-xl font-semibold mb-2 text-gray-100">Data Analytics & AI Solutions</h3>
+                    <p class="text-gray-400 text-sm">Harness the power of data with our analytics and artificial intelligence services.</p>
+                </div>
+                <div class="p-6 border border-gray-700 rounded-xl bg-dark-bg-card hover:bg-gray-800 transition duration-500 electric-glow">
+                    <i data-lucide="glasses" class="h-8 w-8 mb-4 text-neon"></i>
+                    <h3 class="text-xl font-semibold mb-2 text-gray-100">Custom Software Development</h3>
+                    <p class="text-gray-400 text-sm">We design and develop tailored software solutions that meet your business's unique needs. From desktop applications to mobile apps..</p>
+                </div>
+                <div class="p-6 border border-gray-700 rounded-xl bg-dark-bg-card hover:bg-gray-800 transition duration-500 electric-glow">
+                     <i data-lucide="user-lock" class="h-8 w-8 mb-4 text-neon"></i>
+                    <h3 class="text-xl font-semibold mb-2 text-gray-100">Experienced Team</h3>
+                    <p class="text-gray-400 text-sm">Our team is made up of experienced professionals who are passionate about technology and innovation..</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. CORE OPERATIONS TEAM SECTION -->
+        <section class="pt-20 pb-16 border-t border-gray-800/50" id="team">
+            <h2 class="text-4xl font-bold text-center mb-12 text-neon">Core Operations Team</h2>
+            
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                
+                <!-- Team Member 1: Jaxon Prime -->
+                <div class="text-center p-6 bg-dark-bg-card rounded-xl border border-neon-blue/30 electric-glow hover:scale-[1.03] transition duration-300 hover:shadow-2xl hover:shadow-neon-blue/30">
+                    <img src="https://placehold.co/150x150/00C6FF/0A111F?text=S.V" 
+                         alt="Jaxon Prime Avatar" 
+                         onerror="this.onerror=null; this.src='https://placehold.co/150x150/00C6FF/0A111F?text=PRIME';"
+                         class="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-neon-blue/50 shadow-lg shadow-neon-blue/20 object-cover"/>
+                    <h3 class="text-xl font-semibold text-gray-100">MR.SEHDEV VERMA</h3>
+                    <p class="text-neon text-sm font-medium">Managing Director</p> 
+                   
+                </div>
+                
+                <!-- Team Member 2: Mr.ANSHUL GARG -->
+                <div class="text-center p-6 bg-gray-900/50 rounded-xl border border-gray-700 electric-glow hover:scale-[1.03] transition duration-300 hover:shadow-2xl hover:shadow-neon-blue/30">
+                    <img src="https://placehold.co/150x150/00C6FF/0A111F?text=A.G" 
+                         alt="Dr. Selene Yo Avatar" 
+                         onerror="this.onerror=null; this.src='https://placehold.co/150x150/00C6FF/0A111F?text=SELENE';"
+                         class="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-neon-blue/50 shadow-lg shadow-neon-blue/20 object-cover"/>
+                    <h3 class="text-xl font-semibold text-gray-100">Mr.ANSHUL GARG</h3>
+                    <p class="text-neon text-sm font-medium">Head of Marking Management</p> 
+                 </div>
+
+                <!-- Team Member 3: Cassian Orus -->
+                <div class="text-center p-6 bg-dark-bg-card rounded-xl border border-neon-blue/30 electric-glow hover:scale-[1.03] transition duration-300 hover:shadow-2xl hover:shadow-neon-blue/30">
+                    <img src="https://placehold.co/150x150/00C6FF/0A111F?text=C.V" 
+                         alt="Cassian Orus Avatar" 
+                         onerror="this.onerror=null; this.src='https://placehold.co/150x150/00C6FF/0A111F?text=ORUS';"
+                         class="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-neon-blue/50 shadow-lg shadow-neon-blue/20 object-cover"/>
+                    <h3 class="text-xl font-semibold text-gray-100">MRS.CHETNA VERMA</h3>
+                    <p class="text-neon text-sm font-medium">CEO</p> 
+                 </div>
+
+                <!-- Team Member 4: Nadia Atria -->
+                <div class="text-center p-6 bg-gray-900/50 rounded-xl border border-gray-700 electric-glow hover:scale-[1.03] transition duration-300 hover:shadow-2xl hover:shadow-neon-blue/30">
+                    <img src="https://placehold.co/150x150/00C6FF/0A111F?text=S.S" 
+                         alt="Nadia Atria Avatar" 
+                         onerror="this.onerror=null; this.src='https://placehold.co/150x150/00C6FF/0A111F?text=NADIA';"
+                         class="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-neon-blue/50 shadow-lg shadow-neon-blue/20 object-cover"/>
+                    <h3 class="text-xl font-semibold text-gray-100">MR.SACHIN SAINI</h3>
+                    <p class="text-neon text-sm font-medium">Marking Manager</p>
+                      </div>
+            </div>
+        </section>
+
+   <!-- 2. Price SECTION -->
+        <section class="pt-20 pb-16 border-t border-gray-800/50 bg-gray-900/50 rounded-xl p-8" id="services">
+            <h2 class="text-4xl font-bold text-center mb-12 text-neon">Our Pricing</h2>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Service Cards -->
+                <div class="p-6 border border-gray-700 rounded-xl bg-dark-bg-card hover:bg-gray-800 transition duration-500 electric-glow">
+			   <h3 class=" text-xl font-semibold text-neon text-sm font-medium ">Starter Rs/499</h3>  
+                    <p class="text-gray-400 text-sm">Wordpress ThemeFree .</p>
+                      <p class="text-gray-400 text-sm">logo/profile Image.</p>
+		   <p class="text-gray-400 text-sm"> 10-15 Professional Images.</p>
+                  <p class="text-gray-400 text-sm"> 3 Months maintenance</br>QR Code Scanner</p>
+                </div>
+                <div class="p-6 border border-gray-700 rounded-xl bg-dark-bg-card hover:bg-gray-800 transition duration-500 electric-glow">
+                   <h3 class=" text-xl font-semibold text-neon text-sm font-medium ">Basic Rs/999</h3>   
+                    <p class="text-gray-400 text-sm">Wordpress ThemeFree </br>logo/profile Image</br>30-35 Professional Images</br>
+			3 Months maintenance</br>Google Link Integration</br>QR Code Scanner.</p>
+                </div>
+                <div class="p-6 border border-gray-700 rounded-xl bg-dark-bg-card hover:bg-gray-800 transition duration-500 electric-glow">
+                     <h3 class=" text-xl font-semibold text-neon text-sm font-medium ">Pro Rs/1999</h3>  
+                    <p class="text-gray-400 text-sm">Wordpress ThemeFree</br>logo/profile Image</br>50-60 Professional Images</br> Google Link Integration</br>
+			6 Months maintenance</br>Admin portal</br>QR Code Scanner</p>
+                </div>
+                <div class="p-6 border border-gray-700 rounded-xl bg-dark-bg-card hover:bg-gray-800 transition duration-500 electric-glow">
+
+                    <h3 class=" text-xl font-semibold text-neon text-sm font-medium ">Ultra Rs/4999</h3> 
+			   <p class="text-gray-400 text-sm">Wordpress ThemeFree</br>logo/profile Image</br>100-160 Professional Images</br>Google Link Integration</br>
+			6 Months maintenance</br>Admin portal</br>1 year maintenance</br>QR Code Scanner</p>
+                   
+                </div>
+            </div>
+        </section>   
+      <!-- 2. Price Renewvale -->
+          <section class="pt-10 pb-16 border-t border-gray-800/50 bg-gray-900/50 rounded-xl p-8" id="services">
+            <h4 class="text-4xl font-bold text-center mb-12 text-neon">Renewvale Pricing (Same as Standard Prices)</h4>
+    </section> 
+ <!-- 4. DYNAMIC NETWORK STATUS SECTION -->
+        <section class="pt-20 pb-16 border-t border-gray-800/50" id="status">
+            <h2 class="text-4xl font-bold text-center mb-12 text-neon">System Health Monitor</h2>
+            
+            <!-- Data Flow Pulse Border Applied Here -->
+            <div class="max-w-4xl mx-auto p-8 bg-dark-bg-card rounded-xl border-4 border-neon-blue/20 shadow-xl data-flow-pulse">
+                <div class="grid md:grid-cols-2 gap-8 items-center">
+                    
+                    <!-- Latency Gauge (Visual Feedback) -->
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="text-xl font-semibold text-gray-300 flex items-center">
+                                <i data-lucide="gauge" class="h-6 w-6 mr-3 text-neon"></i>
+                                Global Latency
+                            </div>
+                            <span id="latencyDisplay" class="text-3xl font-extrabold text-neon transition-colors duration-700">-- ms</span>
+                        </div>
+                        <div class="h-2 w-full bg-gray-700 rounded-full overflow-hidden">
+                            <div id="latencyGauge" class="h-full w-0 rounded-full transition-all duration-700" style="width: 0%;"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 text-right">Target Latency: <span class="text-neon">~15ms</span></p>
+                    </div>
+
+                    <!-- Throughput Bar (Visual Feedback) -->
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="text-xl font-semibold text-gray-300 flex items-center">
+                                <i data-lucide="router" class="h-6 w-6 mr-3 text-neon"></i>
+                                Data Throughput
+                            </div>
+                            <span id="throughputDisplay" class="text-3xl font-extrabold text-gray-100 transition-colors duration-700">-- GB/s</span>
+                        </div>
+                        <div class="h-2 w-full bg-gray-700 rounded-full overflow-hidden">
+                            <div id="throughputBar" class="h-full bg-gradient-to-r from-neon-blue to-cyan-400 rounded-full transition-all duration-700" style="width: 0%;"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 text-right">Max Capacity: <span class="text-gray-300">250 GB/s</span></p>
+                    </div>
+                </div>
+                
+                <div class="mt-8 pt-4 border-t border-gray-700 flex justify-between items-center">
+                    <div class="text-lg font-medium text-gray-300">Primary Node Status:</div>
+                    <span id="nodeStatus" class="font-semibold text-lg transition-colors duration-700">--</span>
+                </div>
+
+                <div id="statusMessage" class="mt-4 p-4 text-sm rounded-lg bg-blue-900/50 text-neon-blue border border-neon-blue/50 electric-glow">
+                    <i data-lucide="info" class="h-4 w-4 inline mr-2"></i>
+                    Monitoring critical system metrics in real-time. Continuous data stream verified.
+                </div>
+            </div>
+        </section>
+
+
+        <!-- 5. CONTACT & FOOTER SECTION -->
+        <section class="pt-20 pb-16 border-t border-gray-800/50" id="contact">
+            <h2 class="text-4xl font-bold text-center mb-12 text-neon">Engage the Support Matrix</h2>
+            
+            <div class="grid lg:grid-cols-2 gap-12 max-w-5xl mx-auto">
+                <!-- Contact Form (Simulated) -->
+                <div class="bg-dark-bg-card p-8 rounded-xl border border-gray-700 shadow-xl electric-glow">
+                    <h3 class="text-2xl font-semibold mb-4 text-gray-100">Direct Transmission</h3>
+                    <form class="space-y-4">
+                        <input type="text" placeholder="Your Digital Identifier (Name)" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-gray-100 focus:border-neon focus:ring-1 focus:ring-neon outline-none transition duration-200 shadow-sm input-focus-glow">
+                        <input type="email" placeholder="Secure Comm Channel (Email)" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-gray-100 focus:border-neon focus:ring-1 focus:ring-neon outline-none transition duration-200 shadow-sm input-focus-glow">
+                        <textarea placeholder="Message Protocol" rows="4" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-gray-100 focus:border-neon focus:ring-1 focus:ring-neon outline-none transition duration-200 shadow-sm input-focus-glow"></textarea>
+                        <button type="submit" class="w-full px-6 py-3 text-lg font-semibold text-white bg-gradient-neon rounded-lg transition duration-300 hover:opacity-90 electric-glow hover:shadow-2xl hover:shadow-neon-blue/40">
+                            Send Message
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Contact Details -->
+                <div class="space-y-6 lg:mt-0">
+                    <h3 class="text-2xl font-semibold mb-4 text-gray-100">Contact Details</h3>
+                    <div class="space-y-4 text-gray-300">
+                        <div class="flex items-center space-x-4">
+                            <i data-lucide="mail" class="h-6 w-6 text-neon flex-shrink-0"></i>
+                            <div>
+                                <p class="font-medium">Support Channel:</p>
+                                <p class="text-gray-400">Admin@yoursinfo.ni</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <i data-lucide="phone" class="h-6 w-6 text-neon flex-shrink-0"></i>
+                            <div>
+                                <p class="font-medium">Comm. Line:</p>
+                                <p class="text-gray-400">+8708482957(National Node)</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Placeholder Image (Data center) -->
+                    <img src="https://placehold.co/500x200/141C2E/00C6FF?text=YOURSINFO+DATA+CENTER" 
+                        alt="Futuristic data center placeholder" 
+                        class="mt-6 rounded-xl border border-gray-700 shadow-lg w-full h-auto object-cover"/>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-12 py-6 border-t border-gray-800/50 text-center text-sm text-gray-600">
+        &copy; 2077 AetherNet Nexus. All Protocols Reserved. Initiating Secure Connection.
+    </footer>
+    
+    <!-- --- MODAL STRUCTURES (Login/Signup) --- -->
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" onclick="closeModal('loginModal')">
+        <div class="modal-content w-full max-w-md p-8 bg-gray-900 border border-neon/50 rounded-xl shadow-2xl shadow-neon-blue/20" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-3xl font-bold text-neon">Access Log-In Protocol</h3>
+                <button onclick="closeModal('loginModal')" class="text-gray-400 hover:text-neon transition"><i data-lucide="x" class="h-6 w-6"></i></button>
+            </div>
+            
+            <form class="space-y-4">
+                <div>
+                    <label for="login-id" class="block text-sm font-medium text-gray-300 mb-1">Username</label>
+                    <input type="text" id="login-id" placeholder="Enter username" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-neon focus:ring-1 focus:ring-neon outline-none transition duration-200 input-focus-glow">
+                </div>
+                <div>
+                    <label for="login-pass" class="block text-sm font-medium text-gray-300 mb-1">Authentication Key</label>
+                    <input type="password" id="login-pass" placeholder="Enter Password" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-neon focus:ring-1 focus:ring-neon outline-none transition duration-200 input-focus-glow">
+                </div>
+                <button type="submit" class="w-full px-6 py-3 text-lg font-semibold text-white bg-gradient-neon rounded-lg transition duration-300 hover:opacity-90 mt-4 electric-glow hover:shadow-2xl hover:shadow-neon-blue/40">
+                    Login
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sign Up Modal -->
+    <div id="signupModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" onclick="closeModal('signupModal')">
+        <div class="modal-content w-full max-w-md p-8 bg-gray-900 border border-neon/50 rounded-xl shadow-2xl shadow-neon-blue/20" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-3xl font-bold text-neon">New Node Registration</h3>
+                <button onclick="closeModal('signupModal')" class="text-gray-400 hover:text-neon transition"><i data-lucide="x" class="h-6 w-6"></i></button>
+            </div>
+            
+            <form class="space-y-4">
+                <div>
+                    <label for="signup-id" class="block text-sm font-medium text-gray-300 mb-1">Desired Username</label>
+                    <input type="text" id="signup-id" placeholder="Choose Username" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-neon focus:ring-1 focus:ring-neon outline-none transition duration-200 input-focus-glow">
+                </div>
+                <div>
+                    <label for="signup-email" class="block text-sm font-medium text-gray-300 mb-1">Contact Nexus (Email)</label>
+                    <input type="email" id="signup-email" placeholder="Enter Secure Email" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-neon focus:ring-1 focus:ring-neon outline-none transition duration-200 input-focus-glow">
+                </div>
+                <div>
+                    <label for="signup-pass" class="block text-sm font-medium text-gray-300 mb-1">Set Authentication Key</label>
+                    <input type="password" id="signup-pass" placeholder="Create Password" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:border-neon focus:ring-1 focus:ring-neon outline-none transition duration-200 input-focus-glow">
+                </div>
+                <button type="submit" class="w-full px-6 py-3 text-lg font-semibold text-white bg-gradient-neon rounded-lg transition duration-300 hover:opacity-90 mt-4 electric-glow hover:shadow-2xl hover:shadow-neon-blue/40">
+                    Register New Node
+                </button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
